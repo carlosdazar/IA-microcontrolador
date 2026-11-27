@@ -14,6 +14,37 @@ Ambas placas alojan servidores HTTP JSON-RPC 2.0 directamente en su memoria RAM,
 * Carlos Daza
 * Andres Coral
 
+## Tabla de Contenidos
+
+- [Integrantes](#integrantes)
+- [Arquitectura](#arquitectura)
+- [1. Modelos de clasificación](#1-modelos-de-clasificación)
+  - [1.1 Humedad- Temperatura](#11-humedad--temperatura)
+  - [1.2 Acelerómetro](#12-acelerómetro)
+  - [1.3 Cámara](#13-cámara)
+- [2. Configuración ESP32 – ESP32CAM](#2-configuración-esp32--esp32cam)
+  - [2.1 ESP32](#21-esp32)
+  - [2.2 ESP32-CAM](#22-esp32-cam)
+  - [2.3 Archivo de Configuración (config.h) esp32 / esp-cam](#23-archivo-de-configuración-configh--esp32--esp-cam)
+  - [2.4 MCP](#24-mcp)
+- [3. Configuración de AWS IoT Core](#3-configuración-de-aws-iot-core)
+  - [Creación del objeto (Thing)](#creación-del-objeto-thing)
+- [4. Base de datos DynamoDB](#4-base-de-datos-dynamodb)
+  - [Creación de la tabla](#creación-de-la-tabla)
+- [5 Reglas de enrutamiento](#5-reglas-de-enrutamiento)
+  - [Flujo de Configuración General](#flujo-de-configuración-general)
+  - [Resumen de las 3 Reglas y Tablas en DynamoDB](#resumen-de-las-3-reglas-y-tablas-en-dynamodb)
+  - [observar valores de la tabla](#observar-valores-de-la-tabla)
+- [6. Lambda](#6-lambda)
+  - [creación de lambda Peticiones GET](#creación-de-lambda-peticiones-get)
+  - [6.1 Agregar desencadenador](#61-agregar-desencadenador)
+- [7. Dashboard S3](#7-dashboard-s3)
+  - [7.1 Index](#71-index)
+  - [7.2 Dashboard](#72-dashboard)
+- [8 Alertas](#8-alertas)
+- [9 Retos y Posibles Mejoras Futuras](#9-retos-y-posibles-mejoras-futuras)
+```[cite: 1]
+
 # Arquitectura 
 
 ![arquitectura](docs/arquitectura.png)
