@@ -527,6 +527,35 @@ Se crea el bucket
 
 El dashboard permite visualizar en tiempo real las mediciones y predicciones de Edge AI obtenidas por los nodos `ESP32` y `ESP32-CAM`, filtrar la trazabilidad por lote productivo, consultar el historial de los últimos registros almacenados y representar gráficamente el comportamiento climático, inercial y fitosanitario del cultivo. La comunicación entre la interfaz web (alojada en Amazon S3) y la base de datos en Amazon DynamoDB se realiza mediante un servicio API REST serverless desplegado en AWS Lambda, utilizando peticiones HTTP GET para consultar y unificar en paralelo los datos de las tres tablas del sistema.
 
+El funcionamiento de la interfaz se divide en un ciclo continuo de consulta en tiempo real y un flujo bajo demanda para la exportación de datos históricos:
+
+1. **Inicialización y Ciclo de Actualización (`cargarDatos`)**
+   * Al cargar la página, se ejecuta `cargarDatos()`, que realiza una petición `GET` asíncrona (`fetch` con `cache: "no-store"`) al endpoint de API Gateway solicitando registros más recientes** (`?limite=20`) de cada tabla.
+     
+   * Utiliza una bandera de bloqueo (`cargandoAhora`) y un temporizador encadenado (`setTimeout` cada `2500 ms`) en lugar de `setInterval`, asegurando que nunca se lance una nueva petición mientras la anterior siga esperando respuesta de AWS.
+     
+   * Al recibir el JSON, desempaqueta el cuerpo (`payload.body` y los objetos `STRING` de DynamoDB), mapea los atributos de `camara`, `clima` y `movimiento` en memoria (`datosGlobales`) y actualiza la hora de sincronización en pantalla.
+
+2. **Normalización de Datos y Lógica Visual (`actualizarTarjetas`)**
+   
+   * **Conversión de Fechas (`formatearFecha`):** Detecta automáticamente si el `timestamp` llega como entero Unix en segundos o milisegundos (desde `ESP32_CAM`) o como cadena ISO-8601 (desde `ESP32`) y lo transforma al formato horario local de Colombia (`es-CO`).
+     
+   * **Cálculo Cinemático en Cliente:** Para el nodo inercial (`MPU6050`), calcula la magnitud resultante de los tres ejes mediante `Math.hypot(ax, ay, az)` (aceleración total en $\text{m/s}^2$) y `Math.hypot(gx, gy, gz)`
+     
+   * **Evaluación Semántica (`obtenerEstiloEstado`):** Analiza la etiqueta predicha por cada modelo Edge AI y asigna dinámicamente el color del borde, ícono y etiqueta (*pill*): verde para condiciones óptimas (`fresca`, `optimo`, `quieto`), azul para frío (`baja_temp`), ámbar para manejo o deshidratación (`seca`, `volteo`, `transporte`) y rojo para riesgo crítico (`hongo`, `estres`).
+   * **Correlación Cruzada de Alertas:** Compara simultáneamente el último registro de la cámara y el de clima; si ambos coinciden en riesgo fúngico (`hongo` + `riesgo_hongo`), activa el banner superior de alerta combinada.
+
+3. **Renderizado Incremental de Gráficas y Tablas**
+   
+   * **Gráficas (`actualizarGraficas`):** Invierte el orden cronológico de los 20 registros (`reverse()`) para trazar de izquierda a derecha la evolución de Temperatura/Humedad y Aceleración/Giro. Actualiza los arreglos internos de `Chart.js` mediante `chart.update("none")` para refrescar los puntos en tiempo real sin redibujar ni parpadear el lienzo.
+     
+   * **Tabla Multipesaña (`cambiarTab` y `renderizarTabla`):** Permite alternar instantáneamente entre `Cámara (FOMO)`, `Clima (DHT11)` y `Movimiento (MPU6050)` leyendo directamente desde `datosGlobales` en memoria, sin generar tráfico adicional hacia AWS.
+     
+4. **Exportación Bajo Demanda (`descargarCSV`)**
+
+   * Al presionar ** Descargar CSV**, el botón se deshabilita temporalmente y ejecuta una consulta independiente a la API filtrando solo por la pestaña activa y ampliando el límite a 100 registros (`?tabla=${tabActual}&limite=100`).
+     
+   * Sanitiza comillas dobles, formatea las fechas para Excel, antepone el marcador **UTF-8 BOM (`\uFEFF`)** y genera un archivo descargable en memoria (`Blob` + `URL.createObjectURL`) nombrado automáticamente con la pestaña y la fecha actual (`registros_<pestaña>_YYYY-MM-DD.csv`).
 
 
 ### 7.2 Dashboard
