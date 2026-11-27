@@ -337,7 +337,29 @@ En caso de no tener políticas adjuntar política > buscar el nombre de la polí
 
 ![dominio](docs/dominio.png)
 
-Se realiza el mismo procedimiento pero esta vez con el THING `esp32-camera` para la conexión del esp-cam
+Se realiza el mismo procedimiento pero esta vez con el THING `esp32-camera` para la conexión del esp32-cam
+
+# 4. Base de datos DynamoDB
+
+Se utiliza como la base de datos NoSQL gestionada e independiente de servidores (*serverless*) para almacenar el historial de lecturas provenientes del sensor DHT11, sensor MPU6050 y espcam.
+## Creación de la tabla
+
+Para crear la tabla de almacenamiento se realiza le siguiente proceso:
+
+1. Ir a la consola de `DinamoDB `  > `Tablas ` > `crear tabla `.
+
+2. Se debe asigna el nombre de la tabla ej `valores-sensor-dht11`.
+   
+3. la clave de partición es el atributo principal que identifica a un elemento y determina en qué servidor o partición física de almacenamiento se guardan sus datos. Esta se configura de la siguiente manera:
+
+![claves](docs/claves.png)
+
+* **Clave de partición (Partition Key):** `device_id` (`String` / Cadena) :Actúa como el identificador único del dispositivo IoT (ej. `"ESP32"`). Se utiliza mediante una función hash para asignar físicamente los datos entre los distintos nodos de almacenamiento de AWS.
+  
+* **Clave de ordenación (Sort Key):** `timestamp` (`String` / Cadena) :Segunda parte de la clave principal compuesta. Permite registrar múltiples mediciones para un mismo `device_id` y ordenarlas o consultarlas cronológicamente.
+
+Este procedimiento se hace para cada tabla, se obtiene :
+
 
 
 ## Dashboard
