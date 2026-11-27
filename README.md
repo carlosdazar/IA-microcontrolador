@@ -129,8 +129,11 @@ El Json que se publica en AWS es:
 ```bash
 json
  { "timestamp": 1793859932,
-"id_sensor": "ESP32", "temperatura": 23.8, "humedad": 50.8,
-"lote": "LOTE-2026-01", "proceso": "SECADO" }
+"id_sensor": "ESP32",
+"temperatura": 23.8,
+"humedad": 50.8,
+"lote": "LOTE-2026-01",
+"proceso": "SECADO" }
 "model_mov": "quieto",
 "confianza": 0.962,
 "ax": 0.12, 
@@ -138,7 +141,8 @@ json
 "az": 9.78,
 "gx": 0.01,
 "gy": -0.02, 
-"gz": 0.00}
+"gz": 0.00
+}
 ```
   
 * B. Pipeline Climático (1 Hz — `INTERVALO_CLIMA_MS = 1000 ms`)
@@ -153,10 +157,14 @@ El Json que se publica en AWS es:
 json
  {
 "timestamp": 1793859932,
-"id_sensor": "ESP32", "temperatura": 23.8, "humedad": 50.8,
-"lote": "LOTE-2026-01", "proceso": "SECADO" }
+"id_sensor": "ESP32",
+"temperatura": 23.8,
+"humedad": 50.8,
+"lote": "LOTE-2026-01",
+"proceso": "SECADO" 
 "model_temp": "optimo",
-"confianza": 0.985}
+"confianza": 0.985
+}
 ```
 
 ## Dashboard
