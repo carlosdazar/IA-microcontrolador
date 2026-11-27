@@ -27,16 +27,16 @@ Ambas placas alojan servidores HTTP JSON-RPC 2.0 directamente en su memoria RAM,
   - [2.3 Archivo de Configuración (config.h) esp32 / esp-cam](#23-archivo-de-configuración-configh--esp32--esp-cam)
   - [2.4 MCP](#24-mcp)
 - [3. Configuración de AWS IoT Core](#3-configuración-de-aws-iot-core)
-  - [Creación del objeto (Thing)](#creación-del-objeto-thing)
+  - [3.1 Creación del objeto (Thing)](#31-creación-del-objeto-thing)
 - [4. Base de datos DynamoDB](#4-base-de-datos-dynamodb)
-  - [Creación de la tabla](#creación-de-la-tabla)
+  - [4.1 Creación de la tabla](#41-creación-de-la-tabla)
 - [5 Reglas de enrutamiento](#5-reglas-de-enrutamiento)
-  - [Flujo de Configuración General](#flujo-de-configuración-general)
-  - [Resumen de las 3 Reglas y Tablas en DynamoDB](#resumen-de-las-3-reglas-y-tablas-en-dynamodb)
-  - [observar valores de la tabla](#observar-valores-de-la-tabla)
+  - [5.1 Flujo de Configuración General](#51-flujo-de-configuración-general)
+  - [5.2 Resumen de las 3 Reglas y Tablas en DynamoDB](#52-resumen-de-las-3-reglas-y-tablas-en-dynamodb)
+  - [5.3 observar valores de la tabla](#53-observar-valores-de-la-tabla)
 - [6. Lambda](#6-lambda)
-  - [creación de lambda Peticiones GET](#creación-de-lambda-peticiones-get)
-  - [6.1 Agregar desencadenador](#61-agregar-desencadenador)
+  - [6.1creación de lambda Peticiones GET](#61-creación-de-lambda-peticiones-get)
+  - [6.2 Agregar desencadenador](#62-agregar-desencadenador)
 - [7. Dashboard S3](#7-dashboard-s3)
   - [7.1 Index](#71-index)
   - [7.2 Dashboard](#72-dashboard)
@@ -321,7 +321,7 @@ Para conectar ambos microcontroladores al modo Agente de GitHub Copilot, se crea
 
 AWS IoT Core actúa como el *broker* MQTT central que permite la comunicación segura y bidireccional entre el ESP32, las funciones Lambda y el Dashboard Web.
 
-### Creación del objeto (Thing)
+### 3.1 Creación del objeto (Thing)
 
 Un objeto de IoT es una representación digital de su dispositivo físico en la nube, para crear un objeto se realiza le siguiente proceso:
 
@@ -372,7 +372,7 @@ Se realiza el mismo procedimiento pero esta vez con el THING `esp32-camera` para
 ## 4. Base de datos DynamoDB
 
 Se utiliza como la base de datos NoSQL gestionada e independiente de servidores (*serverless*) para almacenar el historial de lecturas provenientes del `sensor DHT11`, `sensor MPU6050` y `esp32-cam`.
-### Creación de la tabla
+### 4.1 Creación de la tabla
 
 Para crear la tabla de almacenamiento se realiza le siguiente proceso:
 
@@ -396,7 +396,7 @@ Este procedimiento se hace para cada tabla, las tablas que se obtienen son :
 
 Para que los mensajes publicados por los nodos **ESP32** y **ESP32-CAM** se almacenen automáticamente en bases de datos NoSQL sin necesidad de servidores intermedios (*serverless*), se configuran **tres reglas independientes** en el motor de reglas de **AWS IoT Core** (una por cada tópico MQTT). 
 
-### Flujo de Configuración General 
+### 5.1 Flujo de Configuración General 
 
 1. Ingresar a la consola de **AWS IoT Core** > **Enrutamiento de mensajes** (*Message routing*) > **Reglas** (*Rules*) > **Crear regla** (*Create rule*).
   
@@ -424,7 +424,7 @@ Para que los mensajes publicados por los nodos **ESP32** y **ESP32-CAM** se alma
 
 5. En **Rol de IAM**, asignar el rol **`LabRole`** (con permisos de escritura sobre DynamoDB) y finalizar la creación de la regla. 
 
- ### Resumen de las 3 Reglas y Tablas en DynamoDB 
+ ### 5.2 Resumen de las 3 Reglas y Tablas en DynamoDB 
 
 | Regla en AWS IoT Core | Tópico MQTT (`FROM`) | Tabla Destino en DynamoDB | Partition Key (`device_id`) | Sort Key (`timestamp`) | Datos Almacenados |
 | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -432,7 +432,7 @@ Para que los mensajes publicados por los nodos **ESP32** y **ESP32-CAM** se alma
 | **2. Movimiento** (`save_movimiento_dynamodb`) | `esp32/movimiento` | `valores-sensor-AcGi` | `esp32-cocatrace` (`${device_id}`) | `${timestamp}` | Predicción IMU (`quieto`, `transporte`, `volteo_hojas`), confianza y 6 ejes ($a_x, a_y, a_z, g_x, g_y, g_z$). |
 | **3. Visión** (`save_imagen_dynamodb`) | `esp32/imagen` | `valores-pcamara-esp32cam` | `ESP32_CAM` (`${id_sensor}`) | `${timestamp}` | Clasificación FOMO (`hoja_sana`, `seca`, `hongo`), confianza y coordenadas del centroide `(x, y)`. |
 
-### observar valores de la tabla
+### 5.3 observar valores de la tabla
 
 Para ver los registros guardados se hace el siguiente proceso:
 
@@ -446,7 +446,7 @@ El backend de la aplicación utiliza funciones **AWS Lambda** escritas en Python
 
 Lambda actúa como el procesador intermedio (el "cerebro" del backend) que conecta el Dashboard web alojado en S3 con los servicios de AWS (DynamoDB y AWS IoT Core).
 
-### creación de lambda Peticiones GET
+### 6.1 creación de lambda Peticiones GET
 
 1. en la consola de `lambda `  > create event function
 
@@ -474,7 +474,7 @@ El codigo completo se puede observar en `src/lambda/iot-backend-img`.
 
 Se lanza el codigo en `prod`
 
-### 6.1 Agregar desencadenador
+### 6.2 Agregar desencadenador
 
 Se utiliza **Amazon API Gateway** para exponer una interfaz REST pública que permite al Dashboard web para consumir los datos guardados.
 
