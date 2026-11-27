@@ -81,6 +81,22 @@ Para construir el dataset, se desplegó un servidor HTTP local en la ESP32-CAM A
 Las metricas que se obtuvieron son:
 
 ![mccam](docs/mccam.PNG)
+
+* **Precisión y Métricas Globales :** El modelo cuantizado alcanzó un **F1-Score global de 85.1 %** (`0.85` en clases *non-background*), con una **precisión (Precision) de 0.95** y una **sensibilidad (Recall) de 0.77** sobre el conjunto de validación, minimizando falsas alarmas durante la inferencia en tiempo real en la ESP32-CAM.
+
+*  **Matriz de Confusión:** Las alertas críticas **`HONGO`** (`100 %` de aciertos) y **`SECA`** (`84.6 %` de aciertos) alcanzaron un **F1-Score de 0.92**, presenta errores al momento de distinguir la hoja `FRESCA` con el background, esto  no genera falsas alarmas ni disparos erróneos en AWS SNS, porque nunca se confunde con HONGO ni con SECA — ambas columnas tienen 0 % de error cruzado.
+  
+* **Desempeño por Clase en Borde:** La alta precisión en las anomalías fitosanitarias (`HONGO` y `SECA`) asegura detecciones confiables en tiempo real sobre el sensor OV2640 sin disparar falsos positivos cuando no hay follaje en el encuadre.
+
+El dataset de entrenamiento y validación se encuentra en `dataset/dataset fotos.rar`
+
+## 2. Configuración ESP32 – ESP32CAM
+
+
+
+
+
+
 ## Dashboard
 
 El Monitor Edge IA - Cocatrace es una interfaz web de monitoreo en tiempo real diseñada para visualizar y analizar las condiciones de un cultivo durante su proceso de germinación y desarrollo. El sistema integra información proveniente de diferentes dispositivos IoT y modelos de inteligencia artificial (IA), permitiendo supervisar tres aspectos fundamentales:
