@@ -92,10 +92,71 @@ El dataset de entrenamiento y validación se encuentra en `dataset/dataset fotos
 
 ## 2. Configuración ESP32 – ESP32CAM
 
+### 2.1 ESP32
 
+Este nodo ejecuta de manera concurrente dos modelos de aprendizaje automático compilados desde **Edge Impulse** y gestiona tanto la telemetría segura hacia la nube como el servidor local MCP.
 
+* **Sensores y Conexiones:**
 
+* **DHT11 (Clima):** Conectado al pin digital `GPIO 19` para muestreo de temperatura (°C) y humedad relativa (%) a **1 Hz**.
 
+* **MPU6050 (IMU de 6 ejes):** Conectado por bus I2C (`SDA: GPIO 21`, `SCL: GPIO 22`), configurado con rango de aceleración y giroscopio  a `21 Hz` con muestreo a **50 Hz**.
+
+Al arrancar el microcontrolador, se ejecutan cuatro rutinas críticas en secuencia: 
+
+1. **Sensores:** Inicia el sensor digital **DHT11** en `GPIO 19` y el bus I2C (`SDA: GPIO 21`, `SCL: GPIO 22`) para comunicarse con el **MPU6050**, configurando su rango dinámico para aceleración y giroscopio, activando el filtro digital pasa-bajos (DLPF) a `21 Hz` para mitigar vibraciones mecánicas de alta frecuencia. 
+
+2. **Asignación de Tensores EON (`iniciarModeloClima`):** Inicializa el grafo neuronal compilado (`tflite_learn_1171835_5_init`) reservando memoria dinámica en heap (`ei_calloc`) y enlazando los punteros directos a los tensores de entrada (`input_clima`) y salida (`output_clima`).
+
+3. **Red Wi-Fi y Reloj NTP (`conectarWiFi`):** Establece conexión en modo estación (`WIFI_STA`) con potencia de transmisión ajustada a `11 dBm` para evitar picos de corriente que afecten al DHT11, y sincroniza el reloj interno mediante servidores NTP (`pool.ntp.org`, `time.nist.gov`) en zona horaria **UTC-5** para generar marcas de tiempo ISO-8601 (`YYYY-MM-DDTHH:MM:SS-05:00`).
+
+4. **Servidores de Comunicación (`iniciarServidorMCP` y `conectarAWS`):** Levanta el servidor HTTP en el puerto `80` (endpoint `/mcp`) y realiza el *handshake* TLS 1.2 contra el endpoint de **AWS IoT Core** (puerto `8883`) utilizando certificados X.509 (`AWS_CERT_CA`, `AWS_CERT_CRT`, `AWS_CERT_PRIVATE`).
+
+#### Bucle Principal Asíncrono (`loop`) 
+
+Para evitar que operaciones de red o inferencia bloqueen el muestreo de alta frecuencia, el `loop()` evita el uso de `delay()` y se divide en dos lazos temporizados mediante `millis()`:
+
+* A. Pipeline de Movimiento Inercial (50 Hz — `INTERVALO_MOV_MS = 20 ms`)
+  
+    * **Adquisición:** Cada 20 milisegundos lee los 6 ejes del MPU6050 (a_x, a_y, a_z, g_x, g_y, g_z) y los apila secuencialmente en `buffer_mov`.
+
+    * ***Inferencia:** Al completar una ventana deslizante de **2 segundos** (`EI_CLASSIFIER_DSP_INPUT_FRAME_SIZE` = 600 floats), invoca `run_classifier()` a través del callback `get_data_mov`.
+  
+    * **Publicación:** Extrae la clase ganadora (`quieto`, `transporte` o `volteo_hojas`), redondea la probabilidad a 3 decimales, actualiza la memoria local y serializa un payload JSON de 512 bytes hacia el tópico `esp32/movimiento`.
+ 
+El Json que se publica en AWS es:
+
+```bash
+json
+ { "timestamp": 1793859932,
+"id_sensor": "ESP32", "temperatura": 23.8, "humedad": 50.8,
+"lote": "LOTE-2026-01", "proceso": "SECADO" }
+"model_mov": "quieto",
+ "confianza": 0.962,
+ "ax": 0.12, 
+"ay": -0.05, 
+"az": 9.78,
+ "gx": 0.01,
+ "gy": -0.02, 
+"gz": 0.00}
+```
+  
+* B. Pipeline Climático (1 Hz — `INTERVALO_CLIMA_MS = 1000 ms`)
+
+    * **Adquisición y Preprocesamiento:** Cada segundo lee temperatura ($^\circ\text{C}$) y humedad ($\%$) del DHT11. Si la lectura es válida (`!isnan(t)`), multiplica la temperatura por el factor de normalización `ESCALA_TEMP = 0.025f` y almacena 3 muestras consecutivas en `buffer_clima`.
+      
+    * **Inferencia EON Agnostic-Type:** Al completar 3 segundos, copia los valores al tensor de entrada soportando automáticamente tanto modelos en punto flotante (`kTfLiteFloat32`) como modelos cuantizados de 8 bits (`kTfLiteInt8`, aplicando escala y *zero-point*), ejecuta `tflite_learn_1171835_5_invoke()` y obtiene la predicción (`baja_temp`, `estres_termico` u `optimo`) para publicarla en `esp32/values`.
+
+El Json que se publica en AWS es:
+
+```bash
+json
+ { "timestamp": 1793859932,
+"id_sensor": "ESP32", "temperatura": 23.8, "humedad": 50.8,
+"lote": "LOTE-2026-01", "proceso": "SECADO" }
+"model_temp": "optimo",
+"confianza": 0.985}
+```
 
 ## Dashboard
 
