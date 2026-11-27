@@ -42,7 +42,7 @@ Ambas placas alojan servidores HTTP JSON-RPC 2.0 directamente en su memoria RAM,
   - [7.2 Dashboard](#72-dashboard)
 - [8 Alertas](#8-alertas)
 - [9 Retos y Posibles Mejoras Futuras](#9-retos-y-posibles-mejoras-futuras)
-```[cite: 1]
+
 
 # Arquitectura 
 
