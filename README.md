@@ -35,6 +35,8 @@ cocatrace-edge-ai/
 ├── index.html                      # Dashboard web en tiempo real (HTML5, CSS3, JS + Chart.js) alojado en Amazon S3
 └── README.md                       # Documentación técnica completa del sistema
 
+```
+
 ## Tabla de Contenidos
 
 - [Arquitectura](#Arquitectura)
@@ -63,6 +65,7 @@ cocatrace-edge-ai/
   - [7.2 Dashboard](#72-dashboard)
 - [8 Alertas](#8-alertas)
 - [9 Retos y Posibles Mejoras Futuras](#9-retos-y-posibles-mejoras-futuras)
+
 
 
 # Arquitectura 
