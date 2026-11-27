@@ -166,6 +166,94 @@ json
 "confianza": 0.985
 }
 ```
+* **Resolución de Colisión de Librerías Edge Impulse (EON Compiler):** Al intentar integrar dos librerías estándar exportadas desde **Edge Impulse** en un mismo *sketch* de Arduino IDE (Movimiento y Clima), el compilador arroja errores de definición múltiple (*multiple definition*) debido a que cada librería empaqueta su propia instancia global del SDK (`edge-impulse-sdk` y el intérprete de TensorFlow Lite Micro).
+  
+Se mantuvo la librería completa de Edge Impulse para el modelo de movimiento (`Acelerometro_esp32_inferencing.h`), mientras que el segundo modelo (Clima) fue exportado como código C++ puro compilado con **EON Compiler** `tflite_learn_1171835_5_compiled.h`), invocando directamente sus funciones estáticas (`init`, `input`, `output`, `invoke`) y reutilizando el *runtime* compartido del primer SDK sin duplicar dependencias ni saturar la memoria Flash del ESP32.
+
+#### Servidor MCP Embebido
+
+El firmware mantiene el estado vivo del sistema sin depender de tarjetas SD ni consultas a la nube
+
+* Define las estructuras `RegistroClima` y `RegistroMov` junto con arreglos estáticos de 10 posiciones (`histClima[10]` y `histMov[10]`).
+
+* Cada nueva inferencia ejecuta `guardarHistorialClima()` o `guardarHistorialMov()`, desplazando los elementos existentes una posición hacia atrás e insertando el registro más reciente en el índice `0`.
+
+El microcontrolador expone una API compatible con **Model Context Protocol (MCP)** sobre `HTTP POST /mcp` y envia información de las `tools`.
+
+### 2.2 ESP32-CAM
+
+El nodo de visión artificial está diseñado para ejecutar inferencia espacial en tiempo real sobre la placa **ESP32-CAM (AI-Thinker)** utilizando el modelo de detección de objetos **FOMO (*Faster Objects, More Objects*)** compilado con Edge Impulse (`Train-Esp32cam_inferencing.h`), integrando telemetría segura hacia AWS IoT Core y un servidor local del protocolo MCP.
+
+Dado que el procesamiento de imágenes requiere bloques continuos de memoria que superan la SRAM interna del microcontrolador, el firmware explota la **PSRAM externa de 4 MB** integrada en el módulo AI-Thinker: 
+
+* **Mapeo del Sensor Óptico (`OV2640`):** Define los pines dedicados del bus paralelo de cámara (`D0–D7`, `VSYNC`, `HREF`, `PCLK`, `XCLK` a `20 MHz`) y el bus SCCB/I2C (`SIOD: GPIO 26`, `SIOC: GPIO 27`).
+
+* **Gestión de Framebuffer (`camera_config`):** Configura la captura nativa en formato comprimido `PIXFORMAT_JPEG` a resolución `QVGA (320x240)` con calidad `12` y aloja el *framebuffer* directamente en memoria externa (`CAMERA_FB_IN_PSRAM`) bajo modo `CAMERA_GRAB_WHEN_EMPTY` para garantizar siempre el fotograma más reciente sin latencia acumulada. 
+
+En cada ciclo de ejecución, el microcontrolador realiza cuatro etapas secuenciales de visión por computadora: 
+
+1. **Reserva Dinámica y Captura (`ei_camera_capture`):** Asigna dinámicamente en memoria un búfer de trabajo (`snapshot_buf` de `320 × 240 × 3` bytes) y obtiene el fotograma JPEG desde el sensor (`esp_camera_fb_get`).
+
+2. **Decodificación y Reescalado (`DSP`):**
+
+* Convierte el fotograma comprimido de **JPEG a RGB888** crudo mediante `fmt2rgb888()` y libera inmediatamente el *framebuffer* de hardware (`esp_camera_fb_return`) para evitar fugas de memoria.
+
+* Si las dimensiones de entrada de la red neuronal difieren de `320x240`, aplica recorte e interpolación bilineal en sitio mediante `ei::image::processing::crop_and_interpolate_rgb888()`.
+
+3. **Empaquetado de Tensores (`ei_camera_get_data`):** Convierte cada píxel de 3 bytes `(R, G, B)` en un entero empaquetado de 24 bits en punto flotante (`(R << 16) + (G << 8) + B`) requerido por el SDK de Edge Impulse, ejecutando posteriormente la red neuronal con `run_classifier()`.
+
+4. **Filtrado de Centroides FOMO (`EI_CLASSIFIER_OBJECT_DETECTION`):**
+
+* Recorre todas las cajas delimitadoras/centroides (`bounding_boxes`) devueltos por FOMO y selecciona la detección con mayor nivel de confianza (`max_val`).
+
+* Aplica un **umbral de confianza mínima de `0.65` (65%)** y un control de tasa de envío (`interval = 2000 ms`) antes de registrar y publicar el evento (`publishDetection`), evitando falsos positivos y saturación de mensajes MQTT.
+
+Al igual que el nodo principal, la ESP32-CAM opera con doble canal de salida simultáneo: 
+
+* **Telemetría Segura a AWS IoT Core:** Se autentica mediante certificados X.509 (`TLS 1.2`) en el puerto `8883` y publica los resultados clasificados (`hoja_sana`, `seca` u `hongo`) junto con sus coordenadas `(x, y)` en el tópico `esp32/imagen`.
+
+El Json que se publica en AWS es:
+
+```bash
+json
+ { 
+  "timestamp": 1793859932,
+  "id_sensor": "ESP32_CAM_01",
+  "estado_hoja": "hoja_sana",
+  "confianza": 0.914,
+  "x": 48,
+  "y": 52,
+  "lote": "LOTE-2026-01",
+  "proceso": "SECADO"
+}
+```
+
+#### Servidor MCP Embebido
+
+Levanta un servidor web HTTP JSON-RPC 2.0 en el puerto `80` (`/mcp`) que atiende peticiones de **VS Code (GitHub Copilot Agent)** mediante `mcpServer.handleClient()`: 
+
+* Implementa la estructura `RegistroHoja` (almacenando `estado_hoja`, `confianza`, coordenadas espaciales `x, y` y marca de tiempo ISO-8601 sincronizada vía NTP en UTC-5).
+  
+* Cada detección válida ejecuta `guardarHistorialHoja()`, desplazando los registros anteriores en el arreglo `historialHoja[10]` e insertando el evento más reciente en el índice `0`.
+
+permite consultas históricas inmediatas desde agentes de IA sin depender de tarjetas microSD ni consultas a la base de datos en la nube.
+
+### 2.3 Archivo de Configuración (config.h)  esp32 / esp-cam
+
+Se crea el archivo llamado `config.h` para las claves de red Wi-Fi y los certificados TLS X.509 de AWS IoT Core, en este archivo  debe incluir.
+
+. Las variables de entorno para la red local (`WIFI_SSID`, `WIFI_PASSWORD`).
+
+2. El **Endpoint de AWS IoT Core**, los tópicos MQTT y el contenido textual de los certificados descargados (`AmazonRootCA1.pem`, `xxxx-certificate.pem.crt` y `xxxx-private.pem.key`) utilizando la sintaxis `PROGMEM R"EOF(...)EOF"`.
+
+Se puede observar más a detalle en `firmware/credentials.h`
+
+Los tres modelos utilizados se encuentran en: `models`
+
+
+
+
+
 
 ## Dashboard
 
