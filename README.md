@@ -54,7 +54,7 @@ Este modelo neuronal se entrena y compila con **Edge Impulse (EON Compiler)** pa
   
 * **Separabilidad de Características (*Data Explorer*):** En la proyección del espacio de características, los clústeres de cada estado térmico aparecen claramente diferenciados y sin solapamiento, lo que explica el **AUC-ROC de 1.00** y garantiza inferencias determinísticas y estables en el ESP32.
 
-El dataset de entrenamiento y validación se encuentra en `
+El dataset de entrenamiento y validación se encuentra en `dataset/dataset temp.rar`
 
 ## Dashboard
 
