@@ -16,8 +16,7 @@ Ambas placas alojan servidores HTTP JSON-RPC 2.0 directamente en su memoria RAM,
 
 ## Tabla de Contenidos
 
-- [Integrantes](#integrantes)
-- [Arquitectura](#arquitectura)
+- [Arquitectura](#Arquitectura)
 - [1. Modelos de clasificación](#1-modelos-de-clasificación)
   - [1.1 Humedad- Temperatura](#11-humedad--temperatura)
   - [1.2 Acelerómetro](#12-acelerómetro)
