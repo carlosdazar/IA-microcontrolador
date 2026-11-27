@@ -342,7 +342,7 @@ Se realiza el mismo procedimiento pero esta vez con el THING `esp32-camera` para
 ## 4. Base de datos DynamoDB
 
 Se utiliza como la base de datos NoSQL gestionada e independiente de servidores (*serverless*) para almacenar el historial de lecturas provenientes del `sensor DHT11`, `sensor MPU6050` y `esp32-cam`.
-## Creación de la tabla
+### Creación de la tabla
 
 Para crear la tabla de almacenamiento se realiza le siguiente proceso:
 
@@ -478,10 +478,58 @@ luego
 
 Luego se implementa el api en etapa `prod`
 
+## 7. Dashboard S3
+
+Amazon S3 (Simple Storage Service) es el servicio de almacenamiento de objetos en la nube que ofrece AWS. Está diseñado para guardar y recuperar cualquier cantidad de datos desde cualquier lugar de Internet con alta disponibilidad, seguridad y durabilidad.
+
+Para crear el bucket se realiza el siguiente proceso:
+
+1. En la consola de `Amazon S3` > crear bucket
+ 
+2. Se agrega el nombre del bucket ej `dashboard-iot-2026-complete`
+
+3.  Se concede acceso público a los buckets y objetos de la siguiente manera:
+
+![bloqueo](docs/bloqueo.png)
+   
+Se crea el bucket
+
+4. Despues de crear el bucket > `propiedades`
+   
+5. Se configura`index.html` como documento índice de inicio de la siguiente manera
+
+![alojamiento](docs/alojamiento.png)
+
+6. En `permisos` se realiza lo siguiente:
+
+![permisos](docs/permisos.png)
+
+7. Se añade la siguiente politca de Bucket para permitir lectura pública
+
+```bash
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "PublicReadGetObject",
+            "Effect": "Allow",
+            "Principal": "*",
+            "Action": "s3:GetObject",
+            "Resource": "arn:aws:s3:::tu-nombre-de-bucket/*"
+        }
+    ]
+}
+
+```
+8. En `Objetos` se agrega `index.html`. este se explica a mas a detalle en la siguiente sección
+
+### 7.1 Index
+
+El dashboard permite visualizar en tiempo real las mediciones y predicciones de Edge AI obtenidas por los nodos `ESP32` y `ESP32-CAM`, filtrar la trazabilidad por lote productivo, consultar el historial de los últimos registros almacenados y representar gráficamente el comportamiento climático, inercial y fitosanitario del cultivo. La comunicación entre la interfaz web (alojada en Amazon S3) y la base de datos en Amazon DynamoDB se realiza mediante un servicio API REST serverless desplegado en AWS Lambda, utilizando peticiones HTTP GET para consultar y unificar en paralelo los datos de las tres tablas del sistema.
 
 
 
-## Dashboard
+### 7.2 Dashboard
 
 El Monitor Edge IA - Cocatrace es una interfaz web de monitoreo en tiempo real diseñada para visualizar y analizar las condiciones de un cultivo durante su proceso de germinación y desarrollo. El sistema integra información proveniente de diferentes dispositivos IoT y modelos de inteligencia artificial (IA), permitiendo supervisar tres aspectos fundamentales:
 
@@ -503,7 +551,7 @@ Esta herramienta visual facilita:
 
 El panel principal está dividido en tres tarjetas que presentan la información brindada por los modelos de IA.
 
-### Visión Artificial (FOMO - Cámara)
+#### Visión Artificial (FOMO - Cámara)
 
 Muestra los resultados obtenidos mediante el modelo FOMO (Faster Objects, More Objects) de visión artificial, donde se muestra: clasificación del estado de la hoja, confianza de la predicción del modelo, coordenadas X e Y asociadas a la detección y los indicadores visuales mediante iconos y colores según el estado identificado.
 
@@ -517,11 +565,11 @@ Presenta los datos relacionados con el movimiento del sistema, donde se muestra:
 
 Además el monitor incorpora dos gráficas dinámicas que son:
 
-### Gráfica de temperatura y humedad
+#### Gráfica de temperatura y humedad
 
 Permite observar el comportamiento histórico de Temperatura (°C) y Humedad relativa (%).
 
-### Gráfica de acelerómetro y giroscopio
+#### Gráfica de acelerómetro y giroscopio
 
 Permite visualizar la evolución de la Aceleración en el eje X (m/s²) y la Velocidad angular en el eje X (°/s).
 
@@ -549,3 +597,26 @@ El botón Descargar CSV permite exportar los registros históricos del subsistem
 Por último, el Monitor Edge IA - Cocatrace proporciona una visualización centralizada de la información generada por los diferentes dispositivos IoT y modelos de IA. Su implementación permite integrar visión artificial, monitoreo ambiental y análisis de movimiento en una única interfaz web, facilitando la supervisión del cultivo, la identificación de posibles condiciones de riesgo y la consulta de información histórica para el análisis del comportamiento del sistema.
 
 ![monitor](docs/monitor.png)
+
+## 8 Alertas
+
+Para notificar de forma inmediata cualquier anomalía climática, logística o fitosanitaria detectada por los modelos de Edge AI, se implementó un pipeline de mensajería sin servidores (*serverless*) basado en reglas SQL de **AWS IoT Core** conectadas a **Amazon SNS (Simple Notification Service)**.
+
+* En amazon sns > ` temas` > `crear un tema` , las opciones que se usan son:
+  
+![confsns](docs/confsns.PNG)
+
+* Se ingresa un nombre  `ej: AlertasEdge`
+
+* Se crea una suscipcion, luego se asigna el correo donde se enviaran las alertas.
+
+Se debe confirmar el correo, Se verifica que el estado este en confirmado
+
+en AWS IoT Core (Enrutamiento de mensajes > Reglas), se configuraron reglas con cláusulas WHERE para disparar alertas únicamente ante condiciones críticas y expresiones SQL CONCAT para construir mensajes legibles directamente desde el motor de reglas (sin requerir funciones Lambda intermedias), utilizando el rol de permisos LabRole:
+
+| Alerta Monitoreada | Tópico MQTT | Condición de Disparo (`WHERE`) | Mensaje Generado (`CONCAT`) |
+| :--- | :--- | :--- | :--- |
+| **Estrés Térmico / Frío** | `esp32/values` | `model_temp = 'estres_termico' OR model_temp = 'baja_temp'` | `CONCAT('ALERTA CLIMA [', lote, ']: ', model_temp, ' detectado (', temperatura, ' °C) en ', device_id)` |
+| **Movimiento / Volteo** | `esp32/movimiento` | `model_mov = 'transporte' OR model_mov = 'volteo_hojas'` | `CONCAT('ALERTA LOGISTICA [', lote, ']: Evento de ', model_mov, ' detectado en ', device_id)` |
+| **Detección Fitosanitaria** | `esp32/imagen` | `estado_hoja = 'hongo' OR estado_hoja = 'seca'` | `CONCAT('ALERTA CULTIVO [', lote, ']: Hoja con ', estado_hoja, ' detectada (Confianza: ', confianza, ')')` |
+
