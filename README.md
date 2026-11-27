@@ -24,7 +24,7 @@ cocatrace-edge-ai/
 │   └── dataset fotos.rar
 ├── docs/                           # Diagramas de arquitectura, métricas de modelos y capturas de configuración AWS
 ├── firmware/                       # Código fuente C++ (.ino) y credenciales (credentials.h) para ESP32 y ESP32-CAM
-├── mcp-server/                     # Configuración de integración MCP para VS Code / GitHub Copilot Agent
+├── .vscode/                        # Configuración de integración MCP para VS Code / GitHub Copilot Agent
 ├── models/                         # Librerías y modelos compilados de Edge Impulse (EON Compiler y FOMO INT8)
 ├── src/
 │   └── lambda/
