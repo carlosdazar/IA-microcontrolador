@@ -250,9 +250,94 @@ Se puede observar más a detalle en `firmware/credentials.h`
 
 Los tres modelos utilizados se encuentran en: `models`
 
+### 2.4 MCP
 
+ambos nodos levantan un servidor HTTP ligero (`WebServer.h`) en el puerto `80` bajo el endpoint `/mcp`, implementando el estándar **JSON-RPC 2.0** (versión de protocolo `2024-11-05`) con soporte de cabeceras CORS y respuestas estructuradas en texto/JSON
 
+* **Negociación Inicial (method: "initialize"):** El microcontrolador responde declarando compatibilidad con el protocolo 2024-11-05, anunciando su capacidad de ejecución de herramientas ("capabilities": { "tools": {} }) e identificándose (esp32-invernadero-mcp v1.1.0 o esp32-cam-vision-mcp v1.0.0).
+  
+* **Descubrimiento de Herramientas (method: "tools/list"):** Cada ESP32 devuelve el catálogo de funciones disponibles junto con su inputSchema en formato JSON Schema, permitiendo que el LLM entienda qué hace cada herramienta y cuándo invocarla de forma autónoma.
+  
+* **Ejecución Remota (method: "tools/call"):** El agente envía el nombre de la herramienta (params.name), el microcontrolador lee directamente sus variables globales o sus arreglos circulares en SRAM (histClima, histMov, historialHoja) y devuelve el resultado empaquetado dentro de result.content[0].text.
 
+las `tools` implementadas son:
+
+| Nodo Físico | Servidor MCP | Herramienta (`tools/call`) | Parámetros | Función y Datos Devueltos desde RAM |
+| :--- | :--- | :--- | :--- | :--- |
+| **ESP32 Principal** (`esp32-cocatrace`) | `esp32-invernadero-mcp` (`v1.1.0`) | `obtener_estado_actual` | *Ninguno* | Temperatura (°C), humedad (%), 6 ejes IMU (`ax`, `ay`, `az`, `gx`, `gy`, `gz`), predicciones activas y confianza. |
+| **ESP32 Principal** (`esp32-cocatrace`) | `esp32-invernadero-mcp` (`v1.1.0`) | `obtener_ultimos_registros` | `cantidad` *(opcional, máx. 10)* | Búfer circular FIFO en RAM con los **últimos 10 registros** de clima y movimiento. |
+| **ESP32 Principal** (`esp32-cocatrace`) | `esp32-invernadero-mcp` (`v1.1.0`) | `verificar_alertas_cultivo` | *Ninguno* | Diagnóstico inmediato en el borde sobre `estres_termico`, `baja_temp`, `transporte` o `volteo`. |
+| **ESP32-CAM** (`ESP32_CAM`) | `esp32-cam-vision-mcp` (`v1.0.0`) | `obtener_estado_hoja` | *Ninguno* | Última clasificación FOMO (`hoja_sana`, `seca`, `hongo`), confianza y coordenadas `(x, y)`. |
+| **ESP32-CAM** (`ESP32_CAM`) | `esp32-cam-vision-mcp` (`v1.0.0`) | `obtener_historial_camara` | `cantidad` *(opcional, máx. 10)* | Búfer circular FIFO en RAM con las **últimas 10 detecciones visuales** del sensor OV2640. |
+
+Para conectar ambos microcontroladores al modo Agente de GitHub Copilot, se crea el archivo `vscode/mcp.json` en la raíz del repositorio apuntando a las direcciones IP asignadas por el router local:
+
+```bash
+{
+  "servers": {
+    "esp32-invernadero": {
+      "type": "http",
+      "url": "[http://192.168.1.100/mcp](http://192.168.1.100/mcp)"
+    },
+    "esp32-cam-vision": {
+      "type": "http",
+      "url": "[http://192.168.1.101/mcp](http://192.168.1.101/mcp)"
+    }
+  }
+}
+```
+
+## 3. Configuración de AWS IoT Core
+
+AWS IoT Core actúa como el *broker* MQTT central que permite la comunicación segura y bidireccional entre el ESP32, las funciones Lambda y el Dashboard Web.
+
+### Creación del objeto (Thing)
+
+Un objeto de IoT es una representación digital de su dispositivo físico en la nube, para crear un objeto se realiza le siguiente proceso:
+
+1. Ir a la consola de `AWS IoT core `  > `Administrar ` >`todos los dispositivos ` > `Objetos `
+
+![objetos](docs/objetos.png)
+
+2. Se debe hacer click en la opción `crear objetos ` > `crear un único objeto`
+
+3. En las propiedades del objeto se define el nombre del objeto ej: ` esp32-cocatrace` > siguiente
+
+4. En la parte de certificados, seleccionar `Generar automáticamente un certificado nuevo`> siguiente
+
+5. seleccionar la opción `crear politica`, se despliega una nueva ventana llamada `crear politica`
+
+6. Se asigna un nombre de la política ej `esp32-cocatrace-policy`
+
+7. Se deben asignar los documentos de política, indica de manera estructurada quién puede hacer qué, sobre qué recurso y bajo qué condiciones. En este caso el dispositivo esp32.
+  
+Se crea lo siguiente
+
+![politicas](docs/politicas.png)
+
+* las política sirven para otorgar permisos de conexión, publicación y suscripción al ESP32
+
+* El uso * es para que estas políticas sirvan en cualquier recurso.
+
+8.  Se crean las políticas > en la pestaña anterior se debe verificar que las políticas estén asociadas al objeto > se crea el objeto.
+
+9. Se generan los certificados y claves, los certificados que se deben descargar son:
+    
+* **Certificado del dispositivo** (`xxxx-certificate.pem.crt`).
+  
+* **Clave privada** (`xxxx-private.pem.key`).
+  
+* **Certificado raíz de Amazon CA1** (`AmazonRootCA1.pem`).
+
+Una vez creado el objeto > dar click al nombre del objeto > certificados > click en el nombre del certificado > políticas 
+
+En caso de no tener políticas adjuntar política > buscar el nombre de la política creada
+
+10. tambien se debe guardar el `end-point` este se ubica en
+
+![dominio](docs/dominio.png)
+
+Se realiza el mismo procedimiento pero esta vez con el THING `esp32-camera` para la conexión del esp-cam
 
 
 ## Dashboard
