@@ -16,8 +16,6 @@ Ambas placas alojan servidores HTTP JSON-RPC 2.0 directamente en su memoria RAM,
 
 ## Estructura del Repositorio
 
-## Estructura del Repositorio
-
 ```text
 cocatrace-edge-ai/
 ├── dataset/                        # Conjuntos de datos de entrenamiento y validación (clima, movimiento e imágenes)
