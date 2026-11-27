@@ -14,6 +14,27 @@ Ambas placas alojan servidores HTTP JSON-RPC 2.0 directamente en su memoria RAM,
 * Carlos Daza
 * Andres Coral
 
+## Estructura del Repositorio
+
+## Estructura del Repositorio
+
+```text
+cocatrace-edge-ai/
+├── dataset/                        # Conjuntos de datos de entrenamiento y validación (clima, movimiento e imágenes)
+│   ├── dataset temp.rar
+│   ├── dataset acelerometro.rar
+│   └── dataset fotos.rar
+├── docs/                           # Diagramas de arquitectura, métricas de modelos y capturas de configuración AWS
+├── firmware/                       # Código fuente C++ (.ino) y credenciales (credentials.h) para ESP32 y ESP32-CAM
+├── mcp-server/                     # Configuración de integración MCP para VS Code / GitHub Copilot Agent
+├── models/                         # Librerías y modelos compilados de Edge Impulse (EON Compiler y FOMO INT8)
+├── src/
+│   └── lambda/
+│       └── iot-backend-img/        # Función AWS Lambda en Python 3.13 para consultas concurrentes en DynamoDB
+├── .gitignore                      # Exclusión de archivos temporales y credenciales sensibles
+├── index.html                      # Dashboard web en tiempo real (HTML5, CSS3, JS + Chart.js) alojado en Amazon S3
+└── README.md                       # Documentación técnica completa del sistema
+
 ## Tabla de Contenidos
 
 - [Arquitectura](#Arquitectura)
