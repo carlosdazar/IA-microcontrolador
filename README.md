@@ -132,12 +132,12 @@ json
 "id_sensor": "ESP32", "temperatura": 23.8, "humedad": 50.8,
 "lote": "LOTE-2026-01", "proceso": "SECADO" }
 "model_mov": "quieto",
- "confianza": 0.962,
- "ax": 0.12, 
+"confianza": 0.962,
+"ax": 0.12, 
 "ay": -0.05, 
 "az": 9.78,
- "gx": 0.01,
- "gy": -0.02, 
+"gx": 0.01,
+"gy": -0.02, 
 "gz": 0.00}
 ```
   
@@ -151,7 +151,8 @@ El Json que se publica en AWS es:
 
 ```bash
 json
- { "timestamp": 1793859932,
+ {
+"timestamp": 1793859932,
 "id_sensor": "ESP32", "temperatura": 23.8, "humedad": 50.8,
 "lote": "LOTE-2026-01", "proceso": "SECADO" }
 "model_temp": "optimo",
