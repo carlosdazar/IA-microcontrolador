@@ -341,7 +341,7 @@ Se realiza el mismo procedimiento pero esta vez con el THING `esp32-camera` para
 
 # 4. Base de datos DynamoDB
 
-Se utiliza como la base de datos NoSQL gestionada e independiente de servidores (*serverless*) para almacenar el historial de lecturas provenientes del sensor DHT11, sensor MPU6050 y espcam.
+Se utiliza como la base de datos NoSQL gestionada e independiente de servidores (*serverless*) para almacenar el historial de lecturas provenientes del `sensor DHT11`, `sensor MPU6050` y `esp32-cam`.
 ## Creación de la tabla
 
 Para crear la tabla de almacenamiento se realiza le siguiente proceso:
@@ -358,7 +358,126 @@ Para crear la tabla de almacenamiento se realiza le siguiente proceso:
   
 * **Clave de ordenación (Sort Key):** `timestamp` (`String` / Cadena) :Segunda parte de la clave principal compuesta. Permite registrar múltiples mediciones para un mismo `device_id` y ordenarlas o consultarlas cronológicamente.
 
-Este procedimiento se hace para cada tabla, se obtiene :
+Este procedimiento se hace para cada tabla, las tablas que se obtienen son :
+
+![tablas](docs/tablas.PNG)
+
+## 5 Reglas de enrutamiento
+
+Para que los mensajes publicados por los nodos **ESP32** y **ESP32-CAM** se almacenen automáticamente en bases de datos NoSQL sin necesidad de servidores intermedios (*serverless*), se configuran **tres reglas independientes** en el motor de reglas de **AWS IoT Core** (una por cada tópico MQTT). 
+
+### Flujo de Configuración General 
+
+1. Ingresar a la consola de **AWS IoT Core** > **Enrutamiento de mensajes** (*Message routing*) > **Reglas** (*Rules*) > **Crear regla** (*Create rule*).
+  
+2. Asignar un nombre descriptivo a la regla según el flujo de datos (por ejemplo: `save_clima_dynamodb`, `save_movimiento_dynamodb` y `save_imagen_dynamodb`).
+   
+3. Configurar la consulta SQL para interceptar y extraer los campos del mensaje JSON:
+
+![consulta_sql](docs/consulta_sql.png) 
+
+* `SELECT *`: Selecciona y extrae automáticamente todas las claves del payload JSON enviado por el microcontrolador.
+  
+* `FROM '<topico_mqtt>'`: Define el tópico MQTT de origen que el motor de reglas escuchará en tiempo real (`esp32/values`, `esp32/movimiento` o `esp32/imagen`).
+  
+* Mapeo de atributos (`timestamp`, `device_id` / `id_sensor`, etc.): Garantiza que las claves de primer nivel estén disponibles para indexar la **Partition Key** y la **Sort Key** al insertar en DynamoDB.
+  
+4. Asignar la acción **DynamoDB** a la regla creada:
+    
+ ![acciones_reglas](docs/acciones_reglas.png)
+
+* **Clave de partición (*Partition Key*):** `${device_id}` o `${id_sensor}` *(extrae dinámicamente en tiempo de ejecución el identificador del nodo desde el JSON procesado)*.
+  
+* **Clave de ordenamiento (*Sort Key*):** `${timestamp}` *(extrae la marca de tiempo ISO-8601 o UNIX enviada por el microcontrolador para ordenar cronológicamente los registros)*.
+  
+* **Escribir datos del mensaje en esta columna:** Configurar una columna de payload (ej. `payload`) para guardar el documento JSON completo con las lecturas y predicciones de IA.
+
+5. En **Rol de IAM**, asignar el rol **`LabRole`** (con permisos de escritura sobre DynamoDB) y finalizar la creación de la regla. 
+
+ ### Resumen de las 3 Reglas y Tablas en DynamoDB 
+
+| Regla en AWS IoT Core | Tópico MQTT (`FROM`) | Tabla Destino en DynamoDB | Partition Key (`device_id`) | Sort Key (`timestamp`) | Datos Almacenados |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **1. Clima** (`save_clima_dynamodb`) | `esp32/values` | `valores-sensor-temp` | `esp32-cocatrace` (`${device_id}`) | `${timestamp}` | Temperatura, humedad, lote, proceso, predicción EON (`optimo`, `baja_temp`, `estres_termico`, `riesgo_hongo`) y confianza. |
+| **2. Movimiento** (`save_movimiento_dynamodb`) | `esp32/movimiento` | `valores-sensor-AcGi` | `esp32-cocatrace` (`${device_id}`) | `${timestamp}` | Predicción IMU (`quieto`, `transporte`, `volteo_hojas`), confianza y 6 ejes ($a_x, a_y, a_z, g_x, g_y, g_z$). |
+| **3. Visión** (`save_imagen_dynamodb`) | `esp32/imagen` | `valores-pcamara-esp32cam` | `ESP32_CAM` (`${id_sensor}`) | `${timestamp}` | Clasificación FOMO (`hoja_sana`, `seca`, `hongo`), confianza y coordenadas del centroide `(x, y)`. |
+
+### observar valores de la tabla
+
+Para ver los registros guardados se hace el siguiente proceso:
+
+1. En  la consola de `DinamoDB `  > explorar elementos.
+   
+2. se ubica el nombre de la tabla  > opción Examen > ejecutar.
+
+## 6. Lambda
+
+El backend de la aplicación utiliza funciones **AWS Lambda** escritas en Python 3.x para procesar las peticiones HTTP/REST provenientes del Dashboard web a través de **API Gateway**.
+
+Lambda actúa como el procesador intermedio (el "cerebro" del backend) que conecta el Dashboard web alojado en S3 con los servicios de AWS (DynamoDB y AWS IoT Core).
+
+### creación de lambda Peticiones GET
+
+1. en la consola de `lambda `  > create event function
+
+2. se asigna el nombre la función ej `iot-backend-img
+
+3. se elije la version ejecutable en este caso Python 3.13
+
+4. En la opción de configuración personalizada > configuración adicional > se activa -rol de ejecución personalizada > labrole
+   
+5. se crea el `lambda `
+    
+6. se crea una nueva ventana con varias opciones > codigo
+    
+Se crea el codigo de la función lamba
+
+Esta función Lambda actúa como la API de lectura (método `GET`) invocado por el Dashboard web, funciona de la siguiente manera:
+
+* **Consultas Concurrentes (`ThreadPoolExecutor`):** Ejecuta 3 hilos en paralelo para consultar simultáneamente las tablas `valores-pcamara-esp32cam`, `valores-sensor-temp` y `valores-sensor-AcGi`, minimizando la latencia de respuesta.
+
+* **Indexación Descendente (`ScanIndexForward=False`):** Utiliza `query()` sobre la *Partition Key* (`device_id`: `ESP32_CAM` y `esp32-cocatrace`) ordenando por `timestamp` de forma descendente para recuperar los últimos registros de cada sensor.
+
+* **Normalización de Payloads (`desempaquetar_item` y `DecimalEncoder`):** Aplana automáticamente los atributos encapsulados por las reglas de IoT Core (`STRING` / `payload`), convierte tipos `Decimal` de DynamoDB a tipos nativos JSON (`int`/`float`), soporta filtrado dinámico por parámetro `?lote=` e incluye cabeceras **CORS** habilitadas.
+
+El codigo completo se puede observar en `src/lambda/iot-backend-img`.
+
+Se lanza el codigo en `prod`
+
+### 6.1 Agregar desencadenador
+
+Se utiliza **Amazon API Gateway** para exponer una interfaz REST pública que permite al Dashboard web para consumir los datos guardados.
+
+1. se da en la opción + agregar desencadenador, las opciones que se usan son:
+
+![desencadenador_1](docs/desencadenador_1.png)
+
+2.Luego se da a la opción agregar para activarla con la lambda anteriormente creado
+
+3. en la consola de `Gateway de API` > crear recurso
+   
+4. se usan los siguientes detalles
+
+![recurso](docs/recurso.png)
+
+5. En la pestaña principal > crear método
+   
+6. tipo de método > GET > función de Lambda
+   
+7. se activa la opción `integración de proxy de lambda`
+   
+8. función de lambda > `iot-backend-img`> crear
+
+En la pagina principal
+
+![recurso_cors](docs/cors.png)
+
+luego
+
+![recurso_cors](docs/recurso_cors.png)
+
+Luego se implementa el api en etapa `prod`
+
 
 
 
