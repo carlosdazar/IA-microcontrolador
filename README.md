@@ -649,3 +649,34 @@ en AWS IoT Core (Enrutamiento de mensajes > Reglas), se configuraron reglas con 
 | **Movimiento / Volteo** | `esp32/movimiento` | `model_mov = 'transporte' OR model_mov = 'volteo_hojas'` | `CONCAT('ALERTA LOGISTICA [', lote, ']: Evento de ', model_mov, ' detectado en ', device_id)` |
 | **Detección Fitosanitaria** | `esp32/imagen` | `estado_hoja = 'hongo' OR estado_hoja = 'seca'` | `CONCAT('ALERTA CULTIVO [', lote, ']: Hoja con ', estado_hoja, ' detectada (Confianza: ', confianza, ')')` |
 
+## 9 Retos y Posibles Mejoras Futuras
+
+Durante el desarrollo e integración del ecosistema Edge AI + AWS Cloud, se resolvieron los siguientes desafíos críticos:
+
+* **Limitaciones de Memoria (SRAM / PSRAM) en Microcontroladores:**
+  
+  * Ejecutar inferencia de visión artificial (FOMO INT8) junto con la pila TLS/MQTT de AWS IoT Core y un servidor MCP HTTP local en el **ESP32-CAM** llevó la memoria al límite. Se resolvió mediante cuantización estricta (`INT8`), asignación dinámica en **PSRAM** para los *tensors* de imagen y el uso de búferes circulares FIFO de tamaño fijo (10 registros) para evitar fragmentación del *heap*.
+    
+* **Inconsistencia de Formatos de Tiempo entre Nodos:**
+  
+  * Mientras el nodo principal (`ESP32`) sincronizaba cadenas ISO-8601 vía NTP, el `ESP32-CAM` publicaba marcas de tiempo en enteros Unix (`epoch`). Esto generaba desorden cronológico en DynamoDB y errores en las gráficas; se solucionó estandarizando ambos flujos a nivel de backend (AWS Lambda) y cliente hacia la zona horaria local de Colombia (`UTC-5`).
+    
+  * En entornos de invernadero con iluminación variable, el modelo FOMO tiende a confundir texturas de fondo (sustrato, sombras o malla) con hojas enfermas (`hongo` o `seca`). Se mitigó implementando una alerta cruzada en el dashboard que exige correlación entre la detección visual y el riesgo climático (`riesgo_hongo` por alta humedad) antes de disparar una alerta crítica en pantalla.
+ 
+Para escalar el sistema se proyectan las siguientes líneas de evolución:
+
+1. **Almacenamiento de Evidencia Visual en Amazon S3:**
+   
+   * Configurar el `ESP32-CAM` para subir la captura JPEG (`Base64` o `HTTP PUT` prefirmado) a un bucket privado de S3 únicamente cuando la confianza de detección de `hongo` supere el `85%`, enlazando la URL de la imagen en DynamoDB para auditoría agronómica.
+     
+2. **Autenticación y Seguridad de API (Amazon Cognito + API Key):**
+
+   * Proteger el endpoint público de API Gateway y el acceso al dashboard en S3 mediante **Amazon Cognito** o claves de API (`x-api-key`), restringiendo el acceso y las descargas históricas por rol de usuario.
+
+3. **Reentrenamiento Continuo (MLOps en el Borde):**
+   
+   * Implementar un flujo automatizado donde los registros exportados en CSV y las capturas validadas por agrónomos alimenten directamente nuevos datasets en **Edge Impulse**, permitiendo actualizar los pesos `.tflite` mediante actualizaciones inalámbricas.
+  
+4. **Migración de *Polling* HTTP a WebSockets en Tiempo Real:**
+
+   * Reemplazar el ciclo de consulta cada `2.5 segundos` en `index.html` por **AWS IoT Core over WebSockets** o **API Gateway WebSocket API**, reduciendo costos de invocación en Lambda y logrando latencia sub-segundo en las gráficas.
