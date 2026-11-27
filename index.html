@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monitor Edge IA - Cocatrace</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --inner: rgba(15, 23, 42, 0.55);
+      --border: #334155;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --green: #22c55e;
+      --red: #ef4444;
+      --amber: #f59e0b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 24px;
+      max-width: 1240px;
+      margin: 0 auto;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 14px;
+      margin-bottom: 22px;
+    }
+    .header-left {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 14px;
+    }
+    h1 { font-size: 1.5rem; color: var(--accent); }
+    .badge-proceso {
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 5px 12px;
+      border-radius: 999px;
+      letter-spacing: 0.05em;
+    }
+    .badge-live {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(34, 197, 94, 0.15);
+      border: 1px solid var(--green);
+      color: var(--green);
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 999px;
+    }
+    .dot-live {
+      width: 7px;
+      height: 7px;
+      background: var(--green);
+      border-radius: 50%;
+      animation: pulse 1.2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.35; transform: scale(0.85); }
+    }
+    .controles { display: flex; gap: 10px; align-items: center; }
+    button {
+      background: #0284c7;
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover { background: #0369a1; }
+    button.btn-csv { background: #059669; }
+    button.btn-csv:hover { background: #047857; }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .alerta-banner {
+      display: none;
+      background: rgba(239, 68, 68, 0.18);
+      border: 1px solid var(--red);
+      color: #fecaca;
+      padding: 12px 16px;
+      border-radius: 10px;
+      margin-bottom: 20px;
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+    .alerta-banner.activa { display: block; }
+
+    .grid-kpis {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      margin-bottom: 22px;
+    }
+    @media (max-width: 960px) {
+      .grid-kpis { grid-template-columns: 1fr; }
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .card-titulo {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      margin-bottom: 14px;
+      font-weight: 700;
+    }
+
+    .estado-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      min-height: 125px;
+      border-radius: 10px;
+      padding: 16px;
+      background: var(--inner);
+      border: 2px solid var(--border);
+      margin-bottom: 14px;
+      transition: border-color 0.25s ease;
+    }
+    .estado-icono { font-size: 2.3rem; margin-bottom: 4px; }
+    .estado-texto { font-size: 1.45rem; font-weight: 800; text-transform: uppercase; }
+    .estado-subvalor { font-size: 1.05rem; font-weight: 700; color: var(--text); margin-top: 4px; }
+    .estado-ok { border-color: var(--green); color: var(--green); }
+    .estado-warn { border-color: var(--amber); color: var(--amber); }
+    .estado-danger { border-color: var(--red); color: var(--red); }
+    .estado-cold { border-color: var(--accent); color: var(--accent); }
+
+    .detalles-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+    .detalles-grid.una-col { grid-template-columns: 1fr; }
+    .dato-item {
+      background: var(--inner);
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+    .dato-label { font-size: 0.75rem; color: var(--muted); margin-bottom: 3px; }
+    .dato-valor { font-size: 0.95rem; font-weight: 700; color: var(--text); }
+
+    .grid-graficas {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 22px;
+    }
+    @media (max-width: 960px) {
+      .grid-graficas { grid-template-columns: 1fr; }
+    }
+    .grafica-box {
+      position: relative;
+      height: 200px;
+      width: 100%;
+    }
+
+    .tabla-contenedor {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow-x: auto;
+    }
+    .tabs-bar {
+      display: flex;
+      gap: 8px;
+      padding: 14px 20px 0 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .tab-btn {
+      background: transparent;
+      color: var(--muted);
+      padding: 8px 14px;
+      border-radius: 8px 8px 0 0;
+      border: 1px solid transparent;
+      border-bottom: none;
+      font-size: 0.88rem;
+    }
+    .tab-btn:hover { background: rgba(15, 23, 42, 0.4); }
+    .tab-btn.active {
+      background: rgba(15, 23, 42, 0.7);
+      color: var(--accent);
+      border-color: var(--border);
+    }
+    .tabla-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    table { width: 100%; border-collapse: collapse; }
+    th, td {
+      padding: 12px 16px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.9rem;
+    }
+    th { background: rgba(15, 23, 42, 0.6); color: var(--muted); font-weight: 600; }
+    tr:last-child td { border-bottom: none; }
+    .pill {
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 0.76rem;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .pill-ok { background: rgba(34, 197, 94, 0.2); color: var(--green); }
+    .pill-warn { background: rgba(245, 158, 11, 0.2); color: var(--amber); }
+    .pill-danger { background: rgba(239, 68, 68, 0.2); color: var(--red); }
+    .pill-cold { background: rgba(56, 189, 248, 0.2); color: var(--accent); }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="header-left">
+      <div>
+        <h1>🌱 Monitor Edge IA - Cocatrace</h1>
+        <span id="status-msg" style="font-size: 0.85rem; color: var(--muted);">Conectando con AWS...</span>
+      </div>
+      <span class="badge-live"><span class="dot-live"></span> EN VIVO</span>
+      <span id="badge-proceso" class="badge-proceso">GERMINACION</span>
+    </div>
+    <div class="controles">
+      <button class="btn-csv" onclick="descargarCSV()">⬇️ Descargar CSV</button>
+    </div>
+  </header>
+
+  <div id="alerta-banner" class="alerta-banner"></div>
+
+  <section class="grid-kpis">
+    <div class="card">
+      <div class="card-titulo">Visión Artificial (FOMO - Cámara)</div>
+      <div id="cuadro-hoja" class="estado-box">
+        <div id="hoja-icono" class="estado-icono">⏳</div>
+        <div id="hoja-clase" class="estado-texto">Esperando...</div>
+      </div>
+      <div class="detalles-grid">
+        <div class="dato-item">
+          <div class="dato-label">Confianza del Modelo</div>
+          <div id="pred-confianza" class="dato-valor">--%</div>
+        </div>
+        <div class="dato-item">
+          <div class="dato-label">Coordenadas FOMO (X, Y)</div>
+          <div id="pred-coords" class="dato-valor">--</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-titulo">Clima (Red EON - DHT11)</div>
+      <div id="cuadro-clima" class="estado-box">
+        <div id="clima-icono" class="estado-icono">🌡️</div>
+        <div id="clima-clase" class="estado-texto">Esperando...</div>
+        <div id="clima-valores" class="estado-subvalor">-- °C · --% HR</div>
+      </div>
+      <div class="detalles-grid una-col">
+        <div class="dato-item">
+          <div class="dato-label">Confianza del Modelo</div>
+          <div id="clima-confianza" class="dato-valor">--%</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-titulo">Manejo / Actividad (IMU - MPU6050)</div>
+      <div id="cuadro-mov" class="estado-box">
+        <div id="mov-icono" class="estado-icono">📡</div>
+        <div id="mov-clase" class="estado-texto">Esperando...</div>
+      </div>
+      <div class="detalles-grid">
+        <div class="dato-item">
+          <div class="dato-label">Confianza del Modelo</div>
+          <div id="mov-confianza" class="dato-valor">--%</div>
+        </div>
+        <div class="dato-item">
+          <div class="dato-label">Aceleración / Giro</div>
+          <div id="mov-ejes" class="dato-valor">--</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="grid-graficas">
+    <div class="card">
+      <div class="card-titulo">Temperatura (°C) y Humedad (%)</div>
+      <div class="grafica-box">
+        <canvas id="grafica-clima"></canvas>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-titulo">Actividad Acelerómetro y Giroscopio</div>
+      <div class="grafica-box">
+        <canvas id="grafica-mov"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <section class="tabla-contenedor">
+    <div class="tabs-bar">
+      <button class="tab-btn active" onclick="cambiarTab('camara', this)">Cámara (FOMO)</button>
+      <button class="tab-btn" onclick="cambiarTab('clima', this)">Clima (DHT11)</button>
+      <button class="tab-btn" onclick="cambiarTab('movimiento', this)">Movimiento (MPU6050)</button>
+    </div>
+    <div class="tabla-header">
+      <span class="card-titulo" style="margin:0;">Historial de los últimos registros</span>
+      <span id="total-badge" style="font-size: 0.85rem; color: var(--muted);">0 registros</span>
+    </div>
+    <table>
+      <thead id="tabla-head"></thead>
+      <tbody id="tabla-body"></tbody>
+    </table>
+  </section>
+
+  <script>
+    const API_URL = "https://80fchi3m5e.execute-api.us-east-1.amazonaws.com/prod/imagen-esp-cam";
+    const INTERVALO_MS = 2500;
+    let tabActual = "camara";
+    let datosGlobales = { camara: [], clima: [], movimiento: [] };
+    let chartClima = null;
+    let chartMov = null;
+    let timerSiguiente = null;
+    let cargandoAhora = false;
+
+    function formatearFecha(ts) {
+      if (!ts) return "-";
+      if (typeof ts === "string" && isNaN(Number(ts))) {
+        const d = new Date(ts.replace(" ", "T"));
+        return isNaN(d.getTime()) ? ts : d.toLocaleString("es-CO");
+      }
+      const num = Number(ts);
+      if (!num) return "-";
+      const ms = num > 1e11 ? num : num * 1000;
+      return new Date(ms).toLocaleString("es-CO");
+    }
+
+    function obtenerEstiloEstado(claseRaw) {
+      const c = (claseRaw || "").toLowerCase();
+
+      if (c.includes("baja_temp") || c.includes("frio")) {
+        return { icono: "❄️", claseCss: "estado-cold", pillCss: "pill-cold" };
+      }
+      if (c.includes("hongo") || c.includes("estres")) {
+        return {
+          icono: c.includes("estres") ? "🔥" : "🍄",
+          claseCss: "estado-danger",
+          pillCss: "pill-danger"
+        };
+      }
+      if (c.includes("seca") || c.includes("volteo") || c.includes("vibracion") || c.includes("transporte")) {
+        return {
+          icono: c.includes("transporte") ? "🚚" : (c.includes("seca") ? "🍂" : "🌿"),
+          claseCss: "estado-warn",
+          pillCss: "pill-warn"
+        };
+      }
+      if (c.includes("fresca") || c.includes("sana") || c.includes("optimo") || c.includes("quieto")) {
+        let iconoNormal = "🌿";
+        if (c.includes("quieto")) iconoNormal = "🟢";
+        else if (c.includes("optimo")) iconoNormal = "✅";
+        return { icono: iconoNormal, claseCss: "estado-ok", pillCss: "pill-ok" };
+      }
+
+      return { icono: "🔍", claseCss: "", pillCss: "" };
+    }
+
+    async function cargarDatos() {
+      if (cargandoAhora) return;
+      if (timerSiguiente) clearTimeout(timerSiguiente);
+      cargandoAhora = true;
+
+      const statusMsg = document.getElementById("status-msg");
+
+      try {
+        const resp = await fetch(`${API_URL}?limite=20`, { cache: "no-store" });
+        const payload = await resp.json();
+        const data = typeof payload.body === "string" ? JSON.parse(payload.body) : payload;
+
+        const rawCam = data.camara || data.datos || [];
+        const itemsCam = rawCam.map(row => {
+          const info = row.STRING || row;
+          return {
+            timestamp: info.timestamp || row.timestamp,
+            id_sensor: info.id_sensor || row.device_id || "ESP32_CAM",
+            lote: info.lote || "-",
+            estado_hoja: info.estado_hoja || "-",
+            confianza: info.confianza,
+            x: info.x ?? 0,
+            y: info.y ?? 0
+          };
+        });
+
+        const rawClima = data.clima || [];
+        const itemsClima = rawClima.map(row => {
+          const info = row.STRING || row;
+          return {
+            timestamp: info.timestamp || row.timestamp,
+            device_id: info.device_id || row.device_id || "ESP32",
+            lote: info.lote || "-",
+            proceso: info.proceso || "-",
+            temperatura: info.temperatura,
+            humedad: info.humedad,
+            model_temp: info.model_temp || "-",
+            confianza: info.confianza
+          };
+        });
+
+        const rawMov = data.movimiento || [];
+        const itemsMov = rawMov.map(row => {
+          const info = row.STRING || row;
+          return {
+            timestamp: info.timestamp || row.timestamp,
+            device_id: info.device_id || row.device_id || "ESP32",
+            lote: info.lote || "-",
+            proceso: info.proceso || "-",
+            model_mov: info.model_mov || "-",
+            confianza: info.confianza,
+            ax: info.ax ?? 0,
+            ay: info.ay ?? 0,
+            az: info.az ?? 0,
+            gx: info.gx ?? 0,
+            gy: info.gy ?? 0,
+            gz: info.gz ?? 0
+          };
+        });
+
+        datosGlobales = { camara: itemsCam, clima: itemsClima, movimiento: itemsMov };
+
+        actualizarTarjetas();
+        actualizarGraficas();
+        renderizarTabla();
+
+        statusMsg.textContent = `Sincronizado: ${new Date().toLocaleTimeString("es-CO")}`;
+      } catch (error) {
+        console.error(error);
+        statusMsg.textContent = "Error de conexión con API Gateway.";
+      } finally {
+        cargandoAhora = false;
+        timerSiguiente = setTimeout(cargarDatos, INTERVALO_MS);
+      }
+    }
+
+    function actualizarTarjetas() {
+      const ultCam = datosGlobales.camara[0];
+      const ultClima = datosGlobales.clima[0];
+      const ultMov = datosGlobales.movimiento[0];
+
+      if (ultCam) {
+        const estilo = obtenerEstiloEstado(ultCam.estado_hoja);
+        document.getElementById("cuadro-hoja").className = `estado-box ${estilo.claseCss}`;
+        document.getElementById("hoja-icono").textContent = estilo.icono;
+        document.getElementById("hoja-clase").textContent = ultCam.estado_hoja;
+        const conf = ultCam.confianza != null ? `${(Number(ultCam.confianza) * 100).toFixed(1)}%` : "--";
+        document.getElementById("pred-confianza").textContent = conf;
+        document.getElementById("pred-coords").textContent = `X: ${ultCam.x}, Y: ${ultCam.y}`;
+      }
+
+      if (ultClima) {
+        const estilo = obtenerEstiloEstado(ultClima.model_temp);
+        document.getElementById("cuadro-clima").className = `estado-box ${estilo.claseCss}`;
+        document.getElementById("clima-icono").textContent = estilo.icono;
+        document.getElementById("clima-clase").textContent = ultClima.model_temp;
+        document.getElementById("clima-valores").textContent = `${ultClima.temperatura ?? "--"} °C · ${ultClima.humedad ?? "--"}% HR`;
+        const conf = ultClima.confianza != null ? `${(Number(ultClima.confianza) * 100).toFixed(1)}%` : "--";
+        document.getElementById("clima-confianza").textContent = conf;
+        if (ultClima.proceso && ultClima.proceso !== "-") {
+          document.getElementById("badge-proceso").textContent = ultClima.proceso;
+        }
+      }
+
+      if (ultMov) {
+        const estilo = obtenerEstiloEstado(ultMov.model_mov);
+        document.getElementById("cuadro-mov").className = `estado-box ${estilo.claseCss}`;
+        document.getElementById("mov-icono").textContent = estilo.icono;
+        document.getElementById("mov-clase").textContent = ultMov.model_mov;
+        const conf = ultMov.confianza != null ? `${(Number(ultMov.confianza) * 100).toFixed(1)}%` : "--";
+        document.getElementById("mov-confianza").textContent = conf;
+        const magA = Math.hypot(ultMov.ax, ultMov.ay, ultMov.az).toFixed(1);
+        const magG = Math.hypot(ultMov.gx, ultMov.gy, ultMov.gz).toFixed(1);
+        document.getElementById("mov-ejes").textContent = `A: ${magA} m/s² · G: ${magG}°/s`;
+      }
+
+      const banner = document.getElementById("alerta-banner");
+      if (ultCam && ultClima &&
+          ultCam.estado_hoja.toLowerCase().includes("hongo") &&
+          ultClima.model_temp.toLowerCase().includes("hongo")) {
+        banner.textContent = `⚠️ Alerta combinada: Detección visual de HONGO + clima en RIESGO_HONGO (${ultClima.humedad}% HR).`;
+        banner.classList.add("activa");
+      } else {
+        banner.classList.remove("activa");
+      }
+    }
+
+    function actualizarGraficas() {
+      const climaHist = [...datosGlobales.clima].reverse();
+      const movHist = [...datosGlobales.movimiento].reverse();
+
+      const labelsClima = climaHist.map(d => formatearFecha(d.timestamp).split(", ")[1] || formatearFecha(d.timestamp));
+      if (!chartClima) {
+        chartClima = new Chart(document.getElementById("grafica-clima"), {
+          type: "line",
+          data: {
+            labels: labelsClima,
+            datasets: [
+              { label: "Temp (°C)", data: climaHist.map(d => d.temperatura), borderColor: "#38bdf8", tension: 0.3, pointRadius: 2 },
+              { label: "Humedad (%)", data: climaHist.map(d => d.humedad), borderColor: "#22c55e", tension: 0.3, pointRadius: 2 }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            plugins: { legend: { labels: { color: "#cbd5e1" } } },
+            scales: {
+              x: { ticks: { color: "#94a3b8", maxTicksLimit: 6 }, grid: { color: "#334155" } },
+              y: { ticks: { color: "#94a3b8" }, grid: { color: "#334155" } }
+            }
+          }
+        });
+      } else {
+        chartClima.data.labels = labelsClima;
+        chartClima.data.datasets[0].data = climaHist.map(d => d.temperatura);
+        chartClima.data.datasets[1].data = climaHist.map(d => d.humedad);
+        chartClima.update("none");
+      }
+
+      const labelsMov = movHist.map(d => formatearFecha(d.timestamp).split(", ")[1] || formatearFecha(d.timestamp));
+      if (!chartMov) {
+        chartMov = new Chart(document.getElementById("grafica-mov"), {
+          type: "line",
+          data: {
+            labels: labelsMov,
+            datasets: [
+              { label: "Acel X (m/s²)", data: movHist.map(d => d.ax), borderColor: "#38bdf8", tension: 0.3, pointRadius: 2 },
+              { label: "Giro X (°/s)", data: movHist.map(d => d.gx), borderColor: "#f59e0b", tension: 0.3, pointRadius: 2 }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            plugins: { legend: { labels: { color: "#cbd5e1" } } },
+            scales: {
+              x: { ticks: { color: "#94a3b8", maxTicksLimit: 6 }, grid: { color: "#334155" } },
+              y: { ticks: { color: "#94a3b8" }, grid: { color: "#334155" } }
+            }
+          }
+        });
+      } else {
+        chartMov.data.labels = labelsMov;
+        chartMov.data.datasets[0].data = movHist.map(d => d.ax);
+        chartMov.data.datasets[1].data = movHist.map(d => d.gx);
+        chartMov.update("none");
+      }
+    }
+
+    function cambiarTab(tab, btn) {
+      tabActual = tab;
+      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      renderizarTabla();
+    }
+
+    function renderizarTabla() {
+      const thead = document.getElementById("tabla-head");
+      const tbody = document.getElementById("tabla-body");
+      const items = datosGlobales[tabActual] || [];
+      document.getElementById("total-badge").textContent = `${items.length} registros`;
+
+      if (!items.length) {
+        thead.innerHTML = "";
+        tbody.innerHTML = `<tr><td colspan="6" style="color: var(--muted);">Sin registros disponibles en esta pestaña.</td></tr>`;
+        return;
+      }
+
+      if (tabActual === "camara") {
+        thead.innerHTML = `<tr>
+          <th>Fecha / Hora</th><th>Cámara</th><th>Lote</th><th>Tipo de Hoja</th><th>Confianza</th><th>Posición (X, Y)</th>
+        </tr>`;
+        tbody.innerHTML = items.map(item => {
+          const estilo = obtenerEstiloEstado(item.estado_hoja);
+          const conf = item.confianza != null ? `${(Number(item.confianza) * 100).toFixed(1)}%` : "-";
+          return `<tr>
+            <td>${formatearFecha(item.timestamp)}</td>
+            <td>${item.id_sensor}</td>
+            <td>${item.lote}</td>
+            <td><span class="pill ${estilo.pillCss}">${item.estado_hoja}</span></td>
+            <td>${conf}</td>
+            <td>X: ${item.x}, Y: ${item.y}</td>
+          </tr>`;
+        }).join("");
+      } else if (tabActual === "clima") {
+        thead.innerHTML = `<tr>
+          <th>Fecha / Hora</th><th>Lote / Proceso</th><th>Estado Clima</th><th>Temp / Humedad</th><th>Confianza</th>
+        </tr>`;
+        tbody.innerHTML = items.map(item => {
+          const estilo = obtenerEstiloEstado(item.model_temp);
+          const conf = item.confianza != null ? `${(Number(item.confianza) * 100).toFixed(1)}%` : "-";
+          return `<tr>
+            <td>${formatearFecha(item.timestamp)}</td>
+            <td>${item.lote} · ${item.proceso}</td>
+            <td><span class="pill ${estilo.pillCss}">${item.model_temp}</span></td>
+            <td>${item.temperatura ?? "-"} °C · ${item.humedad ?? "-"}%</td>
+            <td>${conf}</td>
+          </tr>`;
+        }).join("");
+      } else {
+        thead.innerHTML = `<tr>
+          <th>Fecha / Hora</th><th>Lote / Proceso</th><th>Actividad IA</th><th>Confianza</th><th>Acel (X,Y,Z)</th><th>Giro (X,Y,Z)</th>
+        </tr>`;
+        tbody.innerHTML = items.map(item => {
+          const estilo = obtenerEstiloEstado(item.model_mov);
+          const conf = item.confianza != null ? `${(Number(item.confianza) * 100).toFixed(1)}%` : "-";
+          return `<tr>
+            <td>${formatearFecha(item.timestamp)}</td>
+            <td>${item.lote} · ${item.proceso}</td>
+            <td><span class="pill ${estilo.pillCss}">${item.model_mov}</span></td>
+            <td>${conf}</td>
+            <td>(${item.ax}, ${item.ay}, ${item.az})</td>
+            <td>(${item.gx}, ${item.gy}, ${item.gz})</td>
+          </tr>`;
+        }).join("");
+      }
+    }
+
+    async function descargarCSV() {
+      const btn = document.querySelector(".btn-csv");
+      const textoOriginal = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = "⏳ Generando CSV...";
+
+      try {
+        const resp = await fetch(`${API_URL}?tabla=${tabActual}&limite=100`, { cache: "no-store" });
+        const payload = await resp.json();
+        const data = typeof payload.body === "string" ? JSON.parse(payload.body) : payload;
+
+        const rawLista = data[tabActual] || (tabActual === "camara" ? data.datos : []) || [];
+        if (!rawLista.length) {
+          alert("No hay registros disponibles para exportar.");
+          return;
+        }
+
+        const listaLimpia = rawLista.map(row => {
+          const info = row.STRING || row;
+          const copia = { ...info };
+          copia.timestamp = formatearFecha(info.timestamp || row.timestamp);
+          return copia;
+        });
+
+        const encabezados = Object.keys(listaLimpia[0]);
+        const filas = listaLimpia.map(r =>
+          encabezados.map(k => `"${String(r[k] ?? "").replace(/"/g, '""')}"`).join(",")
+        );
+
+        const contenidoCSV = "\uFEFF" + [encabezados.join(","), ...filas].join("\n");
+        const blob = new Blob([contenidoCSV], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+
+        const enlace = document.createElement("a");
+        enlace.href = url;
+        enlace.download = `registros_${tabActual}_${new Date().toISOString().slice(0, 10)}.csv`;
+        enlace.click();
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        console.error("Error exportando CSV:", err);
+        alert("No se pudo descargar el historial.");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = textoOriginal;
+      }
+    }
+
+    cargarDatos();
+  </script>
+</body>
+</html>
