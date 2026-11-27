@@ -56,6 +56,31 @@ Este modelo neuronal se entrena y compila con **Edge Impulse (EON Compiler)** pa
 
 El dataset de entrenamiento y validación se encuentra en `dataset/dataset temp.rar`
 
+### 1.2 Acelerómetro
+
+Este modelo neuronal se entrena y compila con **Edge Impulse** (`Acelerometro_esp32_inferencing`) sobre el nodo principal **ESP32**, permitiendo supervisar la manipulación física y el estado logístico de las bandejas o contenedores del cultivo en tiempo real. (sensor MPU6050), las metricas obtenidas son:
+
+![mcAc](docs/mcAc.PNG)
+
+* **Precisión y Pérdida:** El modelo alcanzó un **100.0 % de exactitud (*Accuracy*)** y una **pérdida (*Loss*) de 0.00** sobre el conjunto de validación, confirmando una convergencia óptima en la clasificación de patrones inerciales.
+  
+* **Matriz de Confusión:** Las tres clases (`quieto`, `transporte` y `volteo_hojas`) obtuvieron un **F1-Score de 1.00** (100 % de aciertos en la diagonal principal y 0 % de falsos positivos o confusión entre eventos).
+  
+* **Separabilidad de Características (*Data Explorer*):** En la visualización espectral de muestras clasificadas, los tres clústeres (`quieto`, `transporte` y `volteo_hojas`) se agrupan de forma compacta y completamente aislada entre sí, respaldando el **AUC-ROC de 1.00** y asegurando detecciones confiables en tiempo real sobre el MPU6050.
+
+El dataset de entrenamiento y validación se encuentra en `dataset/dataset acelerometro.rar`
+
+### 1.3 Cámara
+
+Este modelo de detección de objetos fue entrenado en **Edge Impulse** utilizando la arquitectura **FOMO (*Faster Objects, More Objects*)** (`Train-Esp32cam_inferencing`) y desplegado sobre un nodo independiente **ESP32-CAM**, permitiendo inspeccionar visualmente el estado fitosanitario de las hojas del cultivo en tiempo real y localizar espacialmente posibles anomalías.
+
+Para construir el dataset, se desplegó un servidor HTTP local en la ESP32-CAM AI-Thinker que transmitía video en vivo por red local hacia el navegador (http://<IP_ESP32_CAM>), permitiendo ajustar la exposición/resolución del sensor OV2640 y guardar las capturas (Get Still) directamente desde el lente real. la interfaz es:
+
+![imgserver](docs/imgserver.png)
+
+Las metricas que se obtuvieron son:
+
+![mccam](docs/mccam.PNG)
 ## Dashboard
 
 El Monitor Edge IA - Cocatrace es una interfaz web de monitoreo en tiempo real diseñada para visualizar y analizar las condiciones de un cultivo durante su proceso de germinación y desarrollo. El sistema integra información proveniente de diferentes dispositivos IoT y modelos de inteligencia artificial (IA), permitiendo supervisar tres aspectos fundamentales:
