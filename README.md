@@ -339,7 +339,7 @@ En caso de no tener políticas adjuntar política > buscar el nombre de la polí
 
 Se realiza el mismo procedimiento pero esta vez con el THING `esp32-camera` para la conexión del esp32-cam
 
-# 4. Base de datos DynamoDB
+## 4. Base de datos DynamoDB
 
 Se utiliza como la base de datos NoSQL gestionada e independiente de servidores (*serverless*) para almacenar el historial de lecturas provenientes del `sensor DHT11`, `sensor MPU6050` y `esp32-cam`.
 ## Creación de la tabla
